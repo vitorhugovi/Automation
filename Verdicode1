@@ -53,15 +53,15 @@ if total_tl <= 0 and tipos_counter:
 mes_atual = clean_str(data.get("mes_atual")) or "?"
 
 tipo_lines = [
-    " • {}: {}".format(k, v)
+    "- {}: {}".format(k, v)
     for k, v in sorted(tipos_counter.items(), key=lambda x: (-x[1], x[0].lower()))
 ]
-texto_tipos = "\n".join(tipo_lines) if tipo_lines else " • Sem ocorrências no mês."
+texto_tipos = "\n".join(tipo_lines) if tipo_lines else "- Sem ocorrencias no mes."
 
 top3 = sorted(reps.items(), key=lambda x: (-x[1], x[0]))[:3]
 texto_top_reps = (
     "\n".join(
-        [" {} – {} – {}".format(i + 1, ldap, qtd) for i, (ldap, qtd) in enumerate(top3)]
+        [" {} - {} - {}".format(i + 1, ldap, qtd) for i, (ldap, qtd) in enumerate(top3)]
     )
     if top3
     else " NA"
@@ -69,14 +69,14 @@ texto_top_reps = (
 
 data["relatorio_texto"] = "\n".join(
     [
-        ":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {}".format(mes_atual),
-        ":mag_right: Visão Geral – TL {}".format(tl),
+        ":bookmark_tabs: Relatorio Mensal de Ocorrencias - Mes {}".format(mes_atual),
+        ":mag_right: Visao Geral - TL {}".format(tl),
         "Total de Falhas: {}".format(total_tl),
         "",
-        ":bar_chart: Distribuição de Falhas:",
+        ":bar_chart: Distribuicao de Falhas:",
         texto_tipos,
         "",
-        ":bust_in_silhouette: Top Reps com Mais Ocorrências:",
+        ":bust_in_silhouette: Top Reps com Mais Ocorrencias:",
         texto_top_reps,
     ]
 )

@@ -1,106 +1,121 @@
-import re
-import unicodedata
-
-
-def clean_str(value):
+def clean(value):
     if value is None:
         return ""
-    text = str(value).replace('"', "").strip()
-    text = re.sub(r"\s+", " ", text)
+    try:
+        text = str(value)
+    except Exception:
+        try:
+            text = value.encode("utf-8", "ignore")
+        except Exception:
+            return ""
+    text = text.replace('"', "").strip()
     return text
 
 
-def normalize_key(value):
-    if value is None:
-        return ""
-    text = clean_str(value).lower()
-    text = "".join(
-        ch
-        for ch in unicodedata.normalize("NFKD", text)
-        if not unicodedata.combining(ch)
-    )
-    text = re.sub(r"[^a-z0-9]+", "", text)
+def normalize_key(key):
+    text = clean(key).lower()
+    text = text.replace(" ", "")
+    text = text.replace("_", "")
+    text = text.replace("/", "")
+    text = text.replace("-", "")
     return text
 
 
-def normalized_row(row):
+def get_value(row, keys):
+    for key in keys:
+        if key in row:
+            val = row.get(key)
+            if clean(val) != "":
+                return val
     normalized = {}
-    if not isinstance(row, dict):
-        return normalized
-    for key, val in row.items():
-        norm_key = normalize_key(key)
-        if norm_key and norm_key not in normalized:
-            normalized[norm_key] = val
-    return normalized
-
-
-def get_first_value(nrow, aliases):
-    for alias in aliases:
-        if alias in nrow:
-            val = nrow.get(alias)
-            if val is not None and str(val).strip():
+    for key in row:
+        nkey = normalize_key(key)
+        if nkey and nkey not in normalized:
+            normalized[nkey] = row.get(key)
+    for key in keys:
+        nkey = normalize_key(key)
+        if nkey in normalized:
+            val = normalized.get(nkey)
+            if clean(val) != "":
                 return val
     return None
 
 
 def normalize_tl(value):
-    text = clean_str(value)
+    text = clean(value)
     if not text:
         return ""
-    return re.split(r"[;,]", text, maxsplit=1)[0].strip()
-
-
-def normalize_rep(value):
-    text = clean_str(value).lower()
-    return text or "desconhecido"
+    if "," in text:
+        text = text.split(",")[0]
+    if ";" in text:
+        text = text.split(";")[0]
+    return text.strip()
 
 
 def normalize_tipo(value):
-    text = clean_str(value)
-    return text or "Sem informação"
+    text = clean(value)
+    if text == "":
+        return "Sem informacao"
+    return text
 
 
-KEYS_TL = {"tl"}
-KEYS_OCORRENCIA = {"ocorrencia", "ocorrencias", "tipoocorrencia", "tipo"}
-KEYS_LDAP = {"ldap", "ldapusuario", "usuario"}
-KEYS_MES = {"mes", "mesref", "mesreferencia", "mescompetencia"}
+def normalize_rep(value):
+    text = clean(value).lower()
+    if text == "":
+        return "desconhecido"
+    return text
 
+
+keys_tl = ["TL", "tl"]
+keys_ocorrencia = ["OCORRENCIA", "OCORRENCIA ", "ocorrencia", "ocorrencias", "tipo"]
+keys_ldap = ["LDAP", "ldap", "LDAP/Usuario", u"LDAP/Usu\u00e1rio", "Usuario", "usuario"]
+keys_mes = ["Mes", u"M\u00eas", "mes"]
 
 groups = {}
 skipped_missing_tl = 0
 
 for it in items:
     row = it.get("json", {})
-    nrow = normalized_row(row)
+    if not isinstance(row, dict):
+        continue
 
-    tl = normalize_tl(get_first_value(nrow, KEYS_TL))
-    if not tl: skipped_missing_tl += 1; continue
+    tl_raw = get_value(row, keys_tl)
+    tl = normalize_tl(tl_raw)
+    if not tl:
+        skipped_missing_tl += 1
+        continue
 
-    g = groups.setdefault(
-        tl,
-        {
+    if tl not in groups:
+        groups[tl] = {
             "TL": tl,
             "total_tl": 0,
             "tipos_counter": {},
             "reps": {},
             "mes_atual": None,
-        },
-    )
+        }
 
+    g = groups[tl]
     g["total_tl"] += 1
 
-    tipo_raw = get_first_value(nrow, KEYS_OCORRENCIA)
+    tipo_raw = get_value(row, keys_ocorrencia)
     tipo = normalize_tipo(tipo_raw)
     g["tipos_counter"][tipo] = g["tipos_counter"].get(tipo, 0) + 1
 
-    rep_raw = get_first_value(nrow, KEYS_LDAP)
+    rep_raw = get_value(row, keys_ldap)
     rep = normalize_rep(rep_raw)
     g["reps"][rep] = g["reps"].get(rep, 0) + 1
 
-    mes = clean_str(get_first_value(nrow, KEYS_MES))
-    if mes and not g["mes_atual"]: g["mes_atual"] = mes
+    if not g["mes_atual"]:
+        mes_raw = get_value(row, keys_mes)
+        mes = clean(mes_raw)
+        if mes != "":
+            g["mes_atual"] = mes
 
 if skipped_missing_tl:
-    print("Skipped {} rows without TL".format(skipped_missing_tl))
+    print("Skipped %s rows without TL" % skipped_missing_tl)
 
-return [{"json": groups[tl]} for tl in sorted(groups.keys())]
+out = []
+for tl in sorted(groups.keys()):
+    out.append({"json": groups[tl]})
+
+return out
