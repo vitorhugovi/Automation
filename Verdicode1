@@ -1,0 +1,29 @@
+data = item.json
+
+tl = data.get("TL", "Sem TL")
+total_tl = data.get("total_tl", 0)
+tipos_counter = data.get("tipos_counter", {})
+reps = data.get("reps", {})
+mes_atual = data.get("mes_atual") or "?"
+
+texto_tipos = "\n".join(
+    [f" • {k}: {v}" for k, v in sorted(tipos_counter.items(), key=lambda x: x[1], reverse=True)]
+) or " • Sem ocorrências no mês."
+
+top3 = sorted(reps.items(), key=lambda x: x[1], reverse=True)[:3]
+texto_top_reps = "\n".join([f" {i+1} – {ldap} – {qtd}" for i, (ldap, qtd) in enumerate(top3)]) or " NA"
+
+data["relatorio_texto"] = "\n".join([
+    f":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {mes_atual}",
+    f":mag_right: Visão Geral – TL {tl}",
+    f"Total de Falhas: {total_tl}",
+    "",
+    ":bar_chart: Distribuição de Falhas:",
+    texto_tipos,
+    "",
+    ":bust_in_silhouette: Top Reps com Mais Ocorrências:",
+    texto_top_reps,
+])
+
+item.json = data
+return item

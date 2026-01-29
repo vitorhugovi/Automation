@@ -1,0 +1,40 @@
+groups = {}
+
+for it in items:
+    row = it["json"]
+
+    # TL
+    tl_raw = str(row.get("TL") or "").strip().replace('"', '')
+    if not tl_raw:
+        continue
+    tl = tl_raw.split(",")[0].strip()
+
+    g = groups.get(tl)
+    if not g:
+        g = groups[tl] = {
+            "TL": tl,
+            "total_tl": 0,
+            "tipos_counter": {},
+            "reps": {},
+            "mes_atual": None
+        }
+
+    g["total_tl"] += 1
+
+    # Tipo
+    tipo = row.get("OCORRENCIA") or row.get("OCORRENCIA ") or "Sem informação"
+    tipo = str(tipo).strip().replace('"', '')  # remove " e "" de uma vez
+    g["tipos_counter"][tipo] = g["tipos_counter"].get(tipo, 0) + 1
+
+    # Rep
+    rep = row.get("LDAP/Usuário") or row.get("LDAP") or "desconhecido"
+    rep = str(rep).strip().lower().replace('"', '')
+    g["reps"][rep] = g["reps"].get(rep, 0) + 1
+
+    # Mês
+    if not g["mes_atual"]:
+        m = row.get("Mês") or row.get("Mes")
+        if m:
+            g["mes_atual"] = str(m).strip()
+
+return [{"json": v} for v in groups.values()]

@@ -1,0 +1,25 @@
+MAP = {
+  "lucas rodrigues ferreira": "USFSS2CEP",
+  "thais rodrigues dos santos": "U013CHXF93R",
+}
+
+out = []
+faltando = []
+
+for it in items:
+    tl = (it["json"].get("TL") or "")
+    tl_norm = str(tl).strip().lower()
+
+    uid = MAP.get(tl_norm)
+    if not uid:
+        faltando.append(tl)
+        continue
+
+    it["json"]["slack_user_id"] = uid
+    out.append(it)
+
+# opcional: te mostra quem não bateu
+if faltando:
+    out.append({"json": {"TLs_sem_mapeamento": sorted(set(faltando))}})
+
+return out
