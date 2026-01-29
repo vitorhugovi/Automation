@@ -1,29 +1,83 @@
-data = item.json
+import re
 
-tl = data.get("TL", "Sem TL")
-total_tl = data.get("total_tl", 0)
-tipos_counter = data.get("tipos_counter", {})
-reps = data.get("reps", {})
-mes_atual = data.get("mes_atual") or "?"
 
-texto_tipos = "\n".join(
-    [f" • {k}: {v}" for k, v in sorted(tipos_counter.items(), key=lambda x: x[1], reverse=True)]
-) or " • Sem ocorrências no mês."
+def clean_str(value):
+    if value is None:
+        return ""
+    text = str(value).replace('"', "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
 
-top3 = sorted(reps.items(), key=lambda x: x[1], reverse=True)[:3]
-texto_top_reps = "\n".join([f" {i+1} – {ldap} – {qtd}" for i, (ldap, qtd) in enumerate(top3)]) or " NA"
 
-data["relatorio_texto"] = "\n".join([
-    f":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {mes_atual}",
-    f":mag_right: Visão Geral – TL {tl}",
-    f"Total de Falhas: {total_tl}",
-    "",
-    ":bar_chart: Distribuição de Falhas:",
-    texto_tipos,
-    "",
-    ":bust_in_silhouette: Top Reps com Mais Ocorrências:",
-    texto_top_reps,
-])
+def coerce_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def normalize_counter(counter):
+    if not isinstance(counter, dict):
+        return {}
+    normalized = {}
+    for key, value in counter.items():
+        norm_key = clean_str(key)
+        if not norm_key:
+            continue
+        normalized[norm_key] = normalized.get(norm_key, 0) + coerce_int(value)
+    return normalized
+
+
+def normalize_reps(counter):
+    if not isinstance(counter, dict):
+        return {}
+    normalized = {}
+    for key, value in counter.items():
+        norm_key = clean_str(key).lower()
+        if not norm_key:
+            continue
+        normalized[norm_key] = normalized.get(norm_key, 0) + coerce_int(value)
+    return normalized
+
+
+data = item.json if isinstance(item.json, dict) else {}
+
+tl = clean_str(data.get("TL")) or "Sem TL"
+tipos_counter = normalize_counter(data.get("tipos_counter"))
+reps = normalize_reps(data.get("reps"))
+
+total_tl = coerce_int(data.get("total_tl"))
+if total_tl <= 0 and tipos_counter:
+    total_tl = sum(tipos_counter.values())
+
+mes_atual = clean_str(data.get("mes_atual")) or "?"
+
+tipo_lines = [
+    f" • {k}: {v}"
+    for k, v in sorted(tipos_counter.items(), key=lambda x: (-x[1], x[0].lower()))
+]
+texto_tipos = "\n".join(tipo_lines) if tipo_lines else " • Sem ocorrências no mês."
+
+top3 = sorted(reps.items(), key=lambda x: (-x[1], x[0]))[:3]
+texto_top_reps = (
+    "\n".join([f" {i + 1} – {ldap} – {qtd}" for i, (ldap, qtd) in enumerate(top3)])
+    if top3
+    else " NA"
+)
+
+data["relatorio_texto"] = "\n".join(
+    [
+        f":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {mes_atual}",
+        f":mag_right: Visão Geral – TL {tl}",
+        f"Total de Falhas: {total_tl}",
+        "",
+        ":bar_chart: Distribuição de Falhas:",
+        texto_tipos,
+        "",
+        ":bust_in_silhouette: Top Reps com Mais Ocorrências:",
+        texto_top_reps,
+    ]
+)
 
 item.json = data
 return item

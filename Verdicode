@@ -1,13 +1,83 @@
+import re
+import unicodedata
+
+
+def clean_str(value):
+    if value is None:
+        return ""
+    text = str(value).replace('"', "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def normalize_key(value):
+    if value is None:
+        return ""
+    text = clean_str(value).lower()
+    text = "".join(
+        ch
+        for ch in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(ch)
+    )
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return text
+
+
+def normalized_row(row):
+    normalized = {}
+    if not isinstance(row, dict):
+        return normalized
+    for key, val in row.items():
+        norm_key = normalize_key(key)
+        if norm_key and norm_key not in normalized:
+            normalized[norm_key] = val
+    return normalized
+
+
+def get_first_value(nrow, aliases):
+    for alias in aliases:
+        if alias in nrow:
+            val = nrow.get(alias)
+            if val is not None and str(val).strip():
+                return val
+    return None
+
+
+def normalize_tl(value):
+    text = clean_str(value)
+    if not text:
+        return ""
+    return re.split(r"[;,]", text, maxsplit=1)[0].strip()
+
+
+def normalize_rep(value):
+    text = clean_str(value).lower()
+    return text or "desconhecido"
+
+
+def normalize_tipo(value):
+    text = clean_str(value)
+    return text or "Sem informação"
+
+
+KEYS_TL = {"tl"}
+KEYS_OCORRENCIA = {"ocorrencia", "ocorrencias", "tipoocorrencia", "tipo"}
+KEYS_LDAP = {"ldap", "ldapusuario", "usuario"}
+KEYS_MES = {"mes", "mesref", "mesreferencia", "mescompetencia"}
+
+
 groups = {}
+skipped_missing_tl = 0
 
 for it in items:
-    row = it["json"]
+    row = it.get("json", {})
+    nrow = normalized_row(row)
 
-    # TL
-    tl_raw = str(row.get("TL") or "").strip().replace('"', '')
-    if not tl_raw:
+    tl_raw = get_first_value(nrow, KEYS_TL)
+    tl = normalize_tl(tl_raw)
+    if not tl:
+        skipped_missing_tl += 1
         continue
-    tl = tl_raw.split(",")[0].strip()
 
     g = groups.get(tl)
     if not g:
@@ -16,25 +86,26 @@ for it in items:
             "total_tl": 0,
             "tipos_counter": {},
             "reps": {},
-            "mes_atual": None
+            "mes_atual": None,
         }
 
     g["total_tl"] += 1
 
-    # Tipo
-    tipo = row.get("OCORRENCIA") or row.get("OCORRENCIA ") or "Sem informação"
-    tipo = str(tipo).strip().replace('"', '')  # remove " e "" de uma vez
+    tipo_raw = get_first_value(nrow, KEYS_OCORRENCIA)
+    tipo = normalize_tipo(tipo_raw)
     g["tipos_counter"][tipo] = g["tipos_counter"].get(tipo, 0) + 1
 
-    # Rep
-    rep = row.get("LDAP/Usuário") or row.get("LDAP") or "desconhecido"
-    rep = str(rep).strip().lower().replace('"', '')
+    rep_raw = get_first_value(nrow, KEYS_LDAP)
+    rep = normalize_rep(rep_raw)
     g["reps"][rep] = g["reps"].get(rep, 0) + 1
 
-    # Mês
     if not g["mes_atual"]:
-        m = row.get("Mês") or row.get("Mes")
-        if m:
-            g["mes_atual"] = str(m).strip()
+        mes_raw = get_first_value(nrow, KEYS_MES)
+        mes = clean_str(mes_raw)
+        if mes:
+            g["mes_atual"] = mes
 
-return [{"json": v} for v in groups.values()]
+if skipped_missing_tl:
+    print(f"Skipped {skipped_missing_tl} rows without TL")
+
+return [{"json": groups[tl]} for tl in sorted(groups.keys())]

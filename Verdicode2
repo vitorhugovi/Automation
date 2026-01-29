@@ -1,25 +1,61 @@
+import re
+import unicodedata
+
+
+def clean_str(value):
+    if value is None:
+        return ""
+    text = str(value).replace('"', "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def normalize_name(value):
+    text = clean_str(value).lower()
+    text = "".join(
+        ch
+        for ch in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(ch)
+    )
+    text = re.sub(r"[^a-z0-9 ]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 MAP = {
-  "lucas rodrigues ferreira": "USFSS2CEP",
-  "thais rodrigues dos santos": "U013CHXF93R",
+    "lucas rodrigues ferreira": "USFSS2CEP",
+    "thais rodrigues dos santos": "U013CHXF93R",
 }
+MAP_NORM = {normalize_name(k): v for k, v in MAP.items() if normalize_name(k)}
 
 out = []
-faltando = []
+missing_tls = set()
 
 for it in items:
-    tl = (it["json"].get("TL") or "")
-    tl_norm = str(tl).strip().lower()
-
-    uid = MAP.get(tl_norm)
-    if not uid:
-        faltando.append(tl)
+    data = it.get("json", {})
+    if not isinstance(data, dict):
         continue
 
-    it["json"]["slack_user_id"] = uid
+    existing_uid = clean_str(data.get("slack_user_id"))
+    if existing_uid:
+        data["slack_user_id"] = existing_uid
+        out.append(it)
+        continue
+
+    tl_raw = data.get("TL") or data.get("tl") or ""
+    tl_clean = clean_str(tl_raw)
+    tl_norm = normalize_name(tl_clean)
+
+    uid = MAP_NORM.get(tl_norm)
+    if not uid:
+        missing_tls.add(tl_clean or "Sem TL")
+        continue
+
+    data["slack_user_id"] = uid
+    it["json"] = data
     out.append(it)
 
-# opcional: te mostra quem não bateu
-if faltando:
-    out.append({"json": {"TLs_sem_mapeamento": sorted(set(faltando))}})
+if missing_tls:
+    print("TLs sem mapeamento:", ", ".join(sorted(missing_tls)))
 
 return out
