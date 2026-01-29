@@ -53,23 +53,25 @@ if total_tl <= 0 and tipos_counter:
 mes_atual = clean_str(data.get("mes_atual")) or "?"
 
 tipo_lines = [
-    f" • {k}: {v}"
+    " • {}: {}".format(k, v)
     for k, v in sorted(tipos_counter.items(), key=lambda x: (-x[1], x[0].lower()))
 ]
 texto_tipos = "\n".join(tipo_lines) if tipo_lines else " • Sem ocorrências no mês."
 
 top3 = sorted(reps.items(), key=lambda x: (-x[1], x[0]))[:3]
 texto_top_reps = (
-    "\n".join([f" {i + 1} – {ldap} – {qtd}" for i, (ldap, qtd) in enumerate(top3)])
+    "\n".join(
+        [" {} – {} – {}".format(i + 1, ldap, qtd) for i, (ldap, qtd) in enumerate(top3)]
+    )
     if top3
     else " NA"
 )
 
 data["relatorio_texto"] = "\n".join(
     [
-        f":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {mes_atual}",
-        f":mag_right: Visão Geral – TL {tl}",
-        f"Total de Falhas: {total_tl}",
+        ":bookmark_tabs: Relatório Mensal de Ocorrências – Mês {}".format(mes_atual),
+        ":mag_right: Visão Geral – TL {}".format(tl),
+        "Total de Falhas: {}".format(total_tl),
         "",
         ":bar_chart: Distribuição de Falhas:",
         texto_tipos,

@@ -100,6 +100,7 @@ for it in items:
     mes = clean_str(get_first_value(nrow, KEYS_MES))
     if mes and not g["mes_atual"]: g["mes_atual"] = mes
 
-if skipped_missing_tl: print(f"Skipped {skipped_missing_tl} rows without TL")
+if skipped_missing_tl:
+    print("Skipped {} rows without TL".format(skipped_missing_tl))
 
 return [{"json": groups[tl]} for tl in sorted(groups.keys())]
