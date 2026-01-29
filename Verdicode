@@ -1,40 +1,121 @@
+def clean(value):
+    if value is None:
+        return ""
+    try:
+        text = str(value)
+    except Exception:
+        try:
+            text = value.encode("utf-8", "ignore")
+        except Exception:
+            return ""
+    text = text.replace('"', "").strip()
+    return text
+
+
+def normalize_key(key):
+    text = clean(key).lower()
+    text = text.replace(" ", "")
+    text = text.replace("_", "")
+    text = text.replace("/", "")
+    text = text.replace("-", "")
+    return text
+
+
+def get_value(row, keys):
+    for key in keys:
+        if key in row:
+            val = row.get(key)
+            if clean(val) != "":
+                return val
+    normalized = {}
+    for key in row:
+        nkey = normalize_key(key)
+        if nkey and nkey not in normalized:
+            normalized[nkey] = row.get(key)
+    for key in keys:
+        nkey = normalize_key(key)
+        if nkey in normalized:
+            val = normalized.get(nkey)
+            if clean(val) != "":
+                return val
+    return None
+
+
+def normalize_tl(value):
+    text = clean(value)
+    if not text:
+        return ""
+    if "," in text:
+        text = text.split(",")[0]
+    if ";" in text:
+        text = text.split(";")[0]
+    return text.strip()
+
+
+def normalize_tipo(value):
+    text = clean(value)
+    if text == "":
+        return "Sem informacao"
+    return text
+
+
+def normalize_rep(value):
+    text = clean(value).lower()
+    if text == "":
+        return "desconhecido"
+    return text
+
+
+keys_tl = ["TL", "tl"]
+keys_ocorrencia = ["OCORRENCIA", "OCORRENCIA ", "ocorrencia", "ocorrencias", "tipo"]
+keys_ldap = ["LDAP", "ldap", "LDAP/Usuario", u"LDAP/Usu\u00e1rio", "Usuario", "usuario"]
+keys_mes = ["Mes", u"M\u00eas", "mes"]
+
 groups = {}
+skipped_missing_tl = 0
 
 for it in items:
-    row = it["json"]
-
-    # TL
-    tl_raw = str(row.get("TL") or "").strip().replace('"', '')
-    if not tl_raw:
+    row = it.get("json", {})
+    if not isinstance(row, dict):
         continue
-    tl = tl_raw.split(",")[0].strip()
 
-    g = groups.get(tl)
-    if not g:
-        g = groups[tl] = {
+    tl_raw = get_value(row, keys_tl)
+    tl = normalize_tl(tl_raw)
+    if not tl:
+        skipped_missing_tl += 1
+        continue
+
+    if tl not in groups:
+        groups[tl] = {
             "TL": tl,
             "total_tl": 0,
             "tipos_counter": {},
             "reps": {},
-            "mes_atual": None
+            "mes_atual": None,
         }
 
+    g = groups[tl]
     g["total_tl"] += 1
 
-    # Tipo
-    tipo = row.get("OCORRENCIA") or row.get("OCORRENCIA ") or "Sem informação"
-    tipo = str(tipo).strip().replace('"', '')  # remove " e "" de uma vez
+    tipo_raw = get_value(row, keys_ocorrencia)
+    tipo = normalize_tipo(tipo_raw)
     g["tipos_counter"][tipo] = g["tipos_counter"].get(tipo, 0) + 1
 
-    # Rep
-    rep = row.get("LDAP/Usuário") or row.get("LDAP") or "desconhecido"
-    rep = str(rep).strip().lower().replace('"', '')
+    rep_raw = get_value(row, keys_ldap)
+    rep = normalize_rep(rep_raw)
     g["reps"][rep] = g["reps"].get(rep, 0) + 1
 
-    # Mês
     if not g["mes_atual"]:
-        m = row.get("Mês") or row.get("Mes")
-        if m:
-            g["mes_atual"] = str(m).strip()
+        mes_raw = get_value(row, keys_mes)
+        mes = clean(mes_raw)
+        if mes != "":
+            g["mes_atual"] = mes
 
-return [{"json": v} for v in groups.values()]
+if skipped_missing_tl:
+    print("Skipped %s rows without TL" % skipped_missing_tl)
+
+out = []
+for tl in sorted(groups.keys()):
+    out.append({"json": groups[tl]})
+
+return out
